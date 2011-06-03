@@ -13,15 +13,10 @@
 class shpParser {
   private $shpFilePath;
   private $shpFile;
-  private $headerInfo;
-  private $shpData;
+  private $headerInfo = array();
+  private $shpData = array();
   
-  function __construct() {
-    $shpData = array();
-    $headerInfo = array();
-  }
-  
-  public function loadFile($path) {
+  public function load($path) {
     $this->shpFilePath = $path;
     $this->shpFile = fopen($this->shpFilePath, "rb");
     $this->loadHeaders();
@@ -89,17 +84,21 @@ class shpParser {
     fseek($this->shpFile, 100);
     
     while(!feof($this->shpFile)) {
-      $records = array();
-      $record = new shpRecord($this);
-      $record->load();
-      $records['geom'] = $record->getData();
+      $records = array(
+        'geom' => $this->loadRecord(),
+      );
       if (!empty($records['geom'])) {
         $this->shpData[] = $records;
       }
     }
   }
   
-  public function loadData($type) {
+  /**
+   * Low-level data pull.
+   * @TODO: extend to enable pulling from shp files directly, or shp files in zip archives.
+   */
+  
+  private function loadData($type) {
     $type_length = $this->loadDataLength($type);
     if ($type_length) {
       $fread_return = fread($this->shpFile, $type_length);
@@ -125,42 +124,28 @@ class shpParser {
     
     return NULL;
   }
-}
-
-/**
- * shpRecord
- *  - Class for handing individual records.
- */
-
-class shpRecord {
-  private $shpParser;
-  private $shapeType;
-  private $shpData;
   
-  function __construct($parser) {
-    $this->shpParser = $parser;
-    $this->shapeType = NULL;
-    $this->shpData = NULL;
-  }
-  
-  public function load() {
-    $this->loadStoreHeaders();
-
-    switch($this->shapeType) {
+  // shpRecord functions.
+  private function loadRecord() {
+    $recordNumber = $this->loadData("N");
+    $this->loadData("N"); // unnecessary data.
+    $shapeType = $this->loadData("V");
+    
+    switch($shapeType) {
       case 0:
-        $this->loadNullRecord();
+        return $this->loadNullRecord();
         break;
       case 1:
-        $this->loadPointRecord();
+        return $this->loadPointRecord();
         break;
       case 3:
-        $this->loadPolyLineRecord();
+        return $this->loadPolyLineRecord();
         break;
       case 5:
-        $this->loadPolygonRecord();
+        return $this->loadPolygonRecord();
         break;
       case 8:
-        $this->loadMultiPointRecord();
+        return $this->loadMultiPointRecord();
         break;
       default:
         // $setError(sprintf("The Shape Type '%s' is not supported.", $shapeType));
@@ -168,43 +153,33 @@ class shpRecord {
     }
   }
   
-  public function getData() {
-    return $this->shpData;
-  }
-  
-  private function loadStoreHeaders() {
-    $this->recordNumber = $this->shpParser->loadData("N");
-    $tmp = $this->shpParser->loadData("N"); //We read the length of the record
-    $this->shapeType = $this->shpParser->loadData("V");
-  }
-  
   private function loadPoint() {
     $data = array();
-    $data['x'] = $this->shpParser->loadData("d");
-    $data['y'] = $this->shpParser->loadData("d");
+    $data['x'] = $this->loadData("d");
+    $data['y'] = $this->loadData("d");
     return $data;
   }
   
   private function loadNullRecord() {
-    $this->shpData = array();
+    return array();
   }
   
   private function loadPolyLineRecord() {
-    $this->shpData = array(
+    $return = array(
       'bbox' => array(
-        'xmin' => $this->shpParser->loadData("d"),
-        'ymin' => $this->shpParser->loadData("d"),
-        'xmax' => $this->shpParser->loadData("d"),
-        'ymax' => $this->shpParser->loadData("d"),
+        'xmin' => $this->loadData("d"),
+        'ymin' => $this->loadData("d"),
+        'xmax' => $this->loadData("d"),
+        'ymax' => $this->loadData("d"),
       ),
     );
     
-    $numParts = $this->shpParser->loadData("V");
-    $numPoints = $this->shpParser->loadData("V");
+    $numParts = $this->loadData("V");
+    $numPoints = $this->loadData("V");
     
     $parts = array();
     for ($i = 0; $i < $numParts; $i++) {
-      $parts[] = $this->shpParser->loadData("V");
+      $parts[] = $this->loadData("V");
     }
     
     $parts[] = $numPoints;
@@ -220,7 +195,7 @@ class shpRecord {
         $lines[] = sprintf('%f %f', $points[$i]['x'], $points[$i]['y']);
       }
       
-      $this->shpData['wkt'] = 'LINESTRING (' . implode(', ', $lines) . ')';
+      $return['wkt'] = 'LINESTRING (' . implode(', ', $lines) . ')';
     }
     else {
       $geometries = array();
@@ -231,10 +206,12 @@ class shpRecord {
         }
         $geometries[] = '(' . implode(', ', $my_points) . ')';
       }
-      $this->shpData['wkt'] = 'MULTILINESTRING (' . implode(', ', $geometries) . ')';
+      $return['wkt'] = 'MULTILINESTRING (' . implode(', ', $geometries) . ')';
     }
     
-    $this->shpData['numGeometries'] = $numParts;
+    $return['numGeometries'] = $numParts;
+        
+    return $return;
   }
   
   private function loadPolygonRecord() {
@@ -242,14 +219,14 @@ class shpRecord {
   }
   
   private function loadMultiPointRecord() {
-    $this->shpData = array(
+    $return = array(
       'bbox' => array(
-        'xmin' => $this->shpParser->loadData("d"),
-        'ymin' => $this->shpParser->loadData("d"),
-        'xmax' => $this->shpParser->loadData("d"),
-        'ymax' => $this->shpParser->loadData("d"),
+        'xmin' => $this->loadData("d"),
+        'ymin' => $this->loadData("d"),
+        'xmax' => $this->loadData("d"),
+        'ymax' => $this->loadData("d"),
       ),
-      'numGeometries' => $this->shpParser->loadData("d"),
+      'numGeometries' => $this->loadData("d"),
       'wkt' => '',
     );
     
@@ -260,13 +237,14 @@ class shpRecord {
       $geometries[] = sprintf('(%f %f)', $point['x'], $point['y']);
     }
     
-    $this->shpData['wkt'] = 'MULTIPOINT(' . implode(', ', $geometries) . ')';
+    $return['wkt'] = 'MULTIPOINT(' . implode(', ', $geometries) . ')';
+    return $return;
   }
   
   private function loadPointRecord() {
     $point = $this->loadPoint();
     
-    $this->shpData = array(
+    $return = array(
       'bbox' => array(
         'xmin' => $point['x'],
         'ymin' => $point['y'],
@@ -276,5 +254,7 @@ class shpRecord {
       'numGeometries' => 1,
       'wkt' => sprintf('POINT(%f %f)', $point['x'], $point['y']),
     );
+    
+    return $return;
   }
 }
