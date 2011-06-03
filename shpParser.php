@@ -127,6 +127,11 @@ class shpParser {
   }
 }
 
+/**
+ * shpRecord
+ *  - Class for handing individual records.
+ */
+
 class shpRecord {
   private $shpParser;
   private $shapeType;
@@ -175,9 +180,8 @@ class shpRecord {
   
   private function loadPoint() {
     $data = array();
-    $x1 = $this->shpParser->loadData("d");
-    $y1 = $this->shpParser->loadData("d");
-    return sprintf('POINT (%f %f)', $x1, $y1);
+    $data['x'] = $this->shpParser->loadData("d");
+    $data['y'] = $this->shpParser->loadData("d");
     return $data;
   }
   
@@ -187,47 +191,90 @@ class shpRecord {
   
   private function loadPolyLineRecord() {
     $this->shpData = array(
-      'xmin' => "STUB",
-      'ymin' => "STUB",
-      'numGeometries' => "STUB",
-      'geometries' => array(
-        0 => "STUB",
+      'bbox' => array(
+        'xmin' => $this->shpParser->loadData("d"),
+        'ymin' => $this->shpParser->loadData("d"),
+        'xmax' => $this->shpParser->loadData("d"),
+        'ymax' => $this->shpParser->loadData("d"),
       ),
     );
+    
+    $numParts = $this->shpParser->loadData("V");
+    $numPoints = $this->shpParser->loadData("V");
+    
+    $parts = array();
+    for ($i = 0; $i < $numParts; $i++) {
+      $parts[] = $this->shpParser->loadData("V");
+    }
+    
+    $parts[] = $numPoints;
+    
+    $points = array();
+    for ($i = 0; $i < $numPoints; $i++) {
+      $points[] = $this->loadPoint();
+    }
+    
+    if ($numParts == 1) {
+      $lines = array();
+      for ($i = 0; $i < $numPoints; $i++) {
+        $lines[] = sprintf('%f %f', $points[$i]['x'], $points[$i]['y']);
+      }
+      
+      $this->shpData['wkt'] = 'LINESTRING (' . implode(', ', $lines) . ')';
+    }
+    else {
+      $geometries = array();
+      for ($i = 0; $i < $numParts; $i++) {
+        $my_points = array();
+        for ($j = $parts[$i]; $j < $parts[$i + 1]; $j++) {
+          $my_points[] = sprintf('%f %f', $points[$j]['x'], $points[$j]['y']);
+        }
+        $geometries[] = '(' . implode(', ', $my_points) . ')';
+      }
+      $this->shpData['wkt'] = 'MULTILINESTRING (' . implode(', ', $geometries) . ')';
+    }
+    
+    $this->shpData['numGeometries'] = $numParts;
   }
   
   private function loadPolygonRecord() {
-    $this->shpData = array(
-      'xmin' => "STUB",
-      'ymin' => "STUB",
-      'numGeometries' => "STUB",
-      'geometries' => array(
-        0 => "STUB",
-      ),
-    );
+    $this->loadPolyLineRecord();
   }
   
   private function loadMultiPointRecord() {
     $this->shpData = array(
-      'xmin' => "STUB",
-      'ymin' => "STUB",
-      'numGeometries' => "STUB",
-      'geometries' => array(
-        0 => "STUB",
+      'bbox' => array(
+        'xmin' => $this->shpParser->loadData("d"),
+        'ymin' => $this->shpParser->loadData("d"),
+        'xmax' => $this->shpParser->loadData("d"),
+        'ymax' => $this->shpParser->loadData("d"),
       ),
+      'numGeometries' => $this->shpParser->loadData("d"),
+      'wkt' => '',
     );
+    
+    $geometries = array();
+    
+    for ($i = 0; $i < $this->shpData['numGeometries']; $i++) {
+      $point = $this->loadPoint();
+      $geometries[] = sprintf('(%f %f)', $point['x'], $point['y']);
+    }
+    
+    $this->shpData['wkt'] = 'MULTIPOINT(' . implode(', ', $geometries) . ')';
   }
   
   private function loadPointRecord() {
-    $point = geoPHP::load($this->loadPoint(), 'wkt');
+    $point = $this->loadPoint();
     
     $this->shpData = array(
-      'xmin' => $point->x(),
-      'ymin' => $point->y(),
-      'numGeometries' => 1,
-      'geometries' => array(
-        0 => $point->out('wkt'),
+      'bbox' => array(
+        'xmin' => $point['x'],
+        'ymin' => $point['y'],
+        'xmax' => $point['x'],
+        'ymax' => $point['y'],
       ),
+      'numGeometries' => 1,
+      'wkt' => sprintf('POINT(%f %f)', $point['x'], $point['y']),
     );
   }
 }
