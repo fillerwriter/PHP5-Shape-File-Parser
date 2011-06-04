@@ -1,0 +1,9 @@
+#Shapefile Parser
+
+This class allows for the extraction of data from a ESRI shapefile. There is one public function (load), which takes a file path of the .shp file. The function returns a formatted array of geometries from the .shp file in the WKT format.
+
+## Goals
+
+- Read both plain .shp files and archives with associated .shp data.
+- When reading an archive, also pull in meta information from data.
+- Lower memory footprint.
