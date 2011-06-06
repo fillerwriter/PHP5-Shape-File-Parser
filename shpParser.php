@@ -174,8 +174,51 @@ class shpParser {
       ),
     );
     
+    $geometries = $this->processLineStrings();
+    
+    $return['numGeometries'] = $geometries['numParts'];
+    if ($geometries['numParts'] > 1) {
+      $return['wkt'] = 'MULTILINESTRING(' . implode(', ', $geometries['geometries']) . ')';
+    }
+    else {
+      $return['wkt'] = 'LINESTRING(' . implode(', ', $geometries['geometries']) . ')';
+    }
+        
+    return $return;
+  }
+  
+  private function loadPolygonRecord() {
+    $return = array(
+      'bbox' => array(
+        'xmin' => $this->loadData("d"),
+        'ymin' => $this->loadData("d"),
+        'xmax' => $this->loadData("d"),
+        'ymax' => $this->loadData("d"),
+      ),
+    );
+  
+    $geometries = $this->processLineStrings();
+    
+    $return['numGeometries'] = $geometries['numParts'];
+    if ($geometries['numParts'] > 1) {
+      $return['wkt'] = 'MULTIPOLYGON(' . implode(', ', $geometries['geometries']) . ')';
+    }
+    else {
+      $return['wkt'] = 'POLYGON(' . implode(', ', $geometries['geometries']) . ')';
+    }
+    
+    return $return;
+  }
+  
+  /**
+   * Process function for loadPolyLineRecord and loadPolygonRecord.
+   * Returns geometries array.
+   */
+  
+  private function processLineStrings() {
     $numParts = $this->loadData("V");
     $numPoints = $this->loadData("V");
+    $geometries = array();
     
     $parts = array();
     for ($i = 0; $i < $numParts; $i++) {
@@ -190,15 +233,12 @@ class shpParser {
     }
     
     if ($numParts == 1) {
-      $lines = array();
       for ($i = 0; $i < $numPoints; $i++) {
-        $lines[] = sprintf('%f %f', $points[$i]['x'], $points[$i]['y']);
+        $geometries[] = sprintf('%f %f', $points[$i]['x'], $points[$i]['y']);
       }
       
-      $return['wkt'] = 'LINESTRING (' . implode(', ', $lines) . ')';
     }
     else {
-      $geometries = array();
       for ($i = 0; $i < $numParts; $i++) {
         $my_points = array();
         for ($j = $parts[$i]; $j < $parts[$i + 1]; $j++) {
@@ -206,16 +246,12 @@ class shpParser {
         }
         $geometries[] = '(' . implode(', ', $my_points) . ')';
       }
-      $return['wkt'] = 'MULTILINESTRING (' . implode(', ', $geometries) . ')';
     }
     
-    $return['numGeometries'] = $numParts;
-        
-    return $return;
-  }
-  
-  private function loadPolygonRecord() {
-    $this->loadPolyLineRecord();
+    return array(
+      'numParts' => $numParts,
+      'geometries' => $geometries,
+    );
   }
   
   private function loadMultiPointRecord() {
