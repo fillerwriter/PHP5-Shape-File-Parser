@@ -201,7 +201,7 @@ class shpParser {
     
     $return['numGeometries'] = $geometries['numParts'];
     if ($geometries['numParts'] > 1) {
-      $return['wkt'] = 'MULTIPOLYGON(' . implode(', ', $geometries['geometries']) . ')';
+      $return['wkt'] = 'MULTIPOLYGON((' . implode('), (', $geometries['geometries']) . '))';
     }
     else {
       $return['wkt'] = 'POLYGON(' . implode(', ', $geometries['geometries']) . ')';
