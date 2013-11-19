@@ -75,7 +75,10 @@ class shpParser {
     
     $this->headerInfo = array(
       'length' => $length,
-      'shapeType' => $shape_type,
+      'shapeType' => array(
+        'id' => $shape_type,
+        'name' => $this->geoTypeFromID($shape_type),
+      ),
       'boundingBox' => $bounding_box,
     );
   }
@@ -84,11 +87,9 @@ class shpParser {
     fseek($this->shpFile, 100);
     
     while(!feof($this->shpFile)) {
-      $records = array(
-        'geom' => $this->loadRecord(),
-      );
-      if (!empty($records['geom'])) {
-        $this->shpData[] = $records;
+      $record = $this->loadRecord();
+      if(!empty($record['geom'])){
+        $this->shpData[] = $record;
       }
     }
   }
@@ -129,28 +130,37 @@ class shpParser {
   private function loadRecord() {
     $recordNumber = $this->loadData("N");
     $this->loadData("N"); // unnecessary data.
-    $shapeType = $this->loadData("V");
+    $shape_type = $this->loadData("V");
     
-    switch($shapeType) {
-      case 0:
-        return $this->loadNullRecord();
+    $record = array(
+      'shapeType' => array(
+        'id' => $shape_type,
+        'name' => $this->geoTypeFromID($shape_type),
+      ),
+    );
+    
+    switch($record['shapeType']['name']){
+      case 'Null Shape':
+        $record['geom'] = $this->loadNullRecord();
         break;
-      case 1:
-        return $this->loadPointRecord();
+      case 'Point':
+        $record['geom'] = $this->loadPointRecord();
         break;
-      case 3:
-        return $this->loadPolyLineRecord();
+      case 'PolyLine':
+        $record['geom'] = $this->loadPolyLineRecord();
         break;
-      case 5:
-        return $this->loadPolygonRecord();
+      case 'Polygon':
+        $record['geom'] = $this->loadPolygonRecord();
         break;
-      case 8:
-        return $this->loadMultiPointRecord();
+      case 'MultiPoint':
+        $record['geom'] = $this->loadMultiPointRecord();
         break;
       default:
         // $setError(sprintf("The Shape Type '%s' is not supported.", $shapeType));
         break;
     }
+    
+    return $record;
   }
   
   private function loadPoint() {
